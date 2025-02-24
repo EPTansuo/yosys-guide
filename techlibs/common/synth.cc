@@ -223,6 +223,7 @@ struct SynthPass : public ScriptPass {
 
 	void script() override
 	{
+		std::cout << "SYNTH START!!!!" << std::endl;
 		if (check_label("begin")) {
 			if (help_mode) {
 				run("hierarchy -check [-top <top> | -auto-top]");
@@ -241,6 +242,7 @@ struct SynthPass : public ScriptPass {
 			run("proc");
 			if (flatten || help_mode)
 				run("flatten", "  (if -flatten)");
+			run("guide_connect");
 			run("opt_expr");
 			run("opt_clean");
 			run("check");

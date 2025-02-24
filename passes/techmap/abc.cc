@@ -1106,10 +1106,12 @@ void abc_module(RTLIL::Design *design, RTLIL::Module *current_module, std::strin
 		}
 
 		buffer = stringf("\"%s\" -s -f %s/abc.script 2>&1", exe_file.c_str(), tempdir_name.c_str());
+		// system((std::string("cp -r ")+tempdir_name.c_str() + " /home/han/").c_str());
+		std::cout << "ABC RUN: " << buffer << std::endl;
 		log("Running ABC command: %s\n", replace_tempdir(buffer, tempdir_name, show_tempdir).c_str());
 
 #ifndef YOSYS_LINK_ABC
-		abc_output_filter filt(tempdir_name, show_tempdir);
+		abc_output_filter filt(tempdir_name, show_tempdir); // Run ABC
 		int ret = run_command(buffer, std::bind(&abc_output_filter::next_line, filt, std::placeholders::_1));
 #else
 		string temp_stdouterr_name = stringf("%s/stdouterr.txt", tempdir_name.c_str());
@@ -1710,6 +1712,7 @@ struct AbcPass : public Pass {
 		}
 		keepff = design->scratchpad_get_bool("abc.keepff", keepff);
 		cleanup = !design->scratchpad_get_bool("abc.nocleanup", !cleanup);
+		cleanup = false;
 		keepff = design->scratchpad_get_bool("abc.keepff", keepff);
 		show_tempdir = design->scratchpad_get_bool("abc.showtmp", show_tempdir);
 		markgroups = design->scratchpad_get_bool("abc.markgroups", markgroups);
@@ -2042,6 +2045,8 @@ struct AbcPass : public Pass {
 			// enabled_gates.insert("NMUX");
 		}
 
+		static int cnt = 0;
+
 		for (auto mod : design->selected_modules())
 		{
 			if (mod->processes.size() > 0) {
@@ -2052,11 +2057,21 @@ struct AbcPass : public Pass {
 			assign_map.set(mod);
 			initvals.set(&assign_map, mod);
 
+			
+
 			if (!dff_mode || !clk_str.empty()) {
+
+				Pass::call(design, "show -prefix " + std::string("before_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
 				abc_module(design, mod, script_file, exe_file, liberty_files, genlib_files, constr_file, cleanup, lut_costs, dff_mode, clk_str, keepff,
 						delay_target, sop_inputs, sop_products, lutin_shared, fast_mode, mod->selected_cells(), show_tempdir, sop_mode, abc_dress, dont_use_cells);
+				std::cout << "Run abc_module:" << mod->name.str() <<std::endl;
+				Pass::call(design, "show -prefix " + std::string("after_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
+				cnt++;
 				continue;
 			}
+
+
+		
 
 			CellTypes ct(design);
 
@@ -2220,6 +2235,14 @@ struct AbcPass : public Pass {
 				assign_map.set(mod);
 			}
 		}
+
+		// We should not set the `keep` attribute.
+		// for(auto module: design->selected_whole_modules_warn()){
+		// 	for(auto wire : module->selected_wires()){
+		// 		wire->set_bool_attribute(ID::keep, true);
+		// 	}
+		// }
+
 
 		assign_map.clear();
 		signal_list.clear();

@@ -1,7 +1,7 @@
 
-CONFIG := none
+#CONFIG := none
 # CONFIG := clang
-# CONFIG := gcc
+ CONFIG := gcc
 # CONFIG := wasi
 # CONFIG := msys2-32
 # CONFIG := msys2-64
@@ -53,7 +53,7 @@ SANITIZER =
 # SANITIZER = cfi
 
 # Prefer using ENABLE_DEBUG over setting these
-OPT_LEVEL := -O3
+OPT_LEVEL := -Og
 GCC_LTO :=
 CLANG_LTO := -flto=thin
 
@@ -97,7 +97,7 @@ YOSYS_SRC := $(dir $(firstword $(MAKEFILE_LIST)))
 VPATH := $(YOSYS_SRC)
 
 CXXSTD ?= c++17
-CXXFLAGS := $(CXXFLAGS) -Wall -Wextra -ggdb -I. -I"$(YOSYS_SRC)" -MD -MP -D_YOSYS_ -fPIC -I$(PREFIX)/include
+CXXFLAGS := $(CXXFLAGS) -g  -Wall -Wextra -ggdb -I. -I"$(YOSYS_SRC)" -MD -MP -D_YOSYS_ -fPIC -I$(PREFIX)/include
 LIBS := $(LIBS) -lstdc++ -lm
 PLUGIN_LINKFLAGS :=
 PLUGIN_LIBS :=
@@ -742,7 +742,7 @@ endif
 	$(Q) mkdir -p $(dir $@)
 	$(P) $(CXX) -o $@ -c $(CPPFLAGS) $(CXXFLAGS) $<
 
-YOSYS_VER_STR := Yosys $(YOSYS_VER) (git sha1 $(GIT_REV), $(notdir $(CXX)) $(shell \
+YOSYS_VER_STR := Yosys_Modified $(YOSYS_VER) (git sha1 $(GIT_REV), $(notdir $(CXX)) $(shell \
 		$(CXX) --version | tr ' ()' '\n' | grep '^[0-9]' | head -n1) $(filter -f% -m% -O% -DNDEBUG,$(CXXFLAGS)))
 
 kernel/version_$(GIT_REV).cc: $(YOSYS_SRC)/Makefile

@@ -231,6 +231,7 @@ void Pass::extra_args(std::vector<std::string> args, size_t argidx, RTLIL::Desig
 
 void Pass::call(RTLIL::Design *design, std::string command)
 {
+	// std::cout << "PassCall: " << command << std::endl;
 	std::vector<std::string> args;
 
 	std::string cmd_buf = command;
@@ -297,6 +298,11 @@ void Pass::call(RTLIL::Design *design, std::string command)
 
 void Pass::call(RTLIL::Design *design, std::vector<std::string> args)
 {
+	std::cout << "PassCall: ";
+	for(auto arg: args){
+		std::cout << arg << " ";
+	}
+	std::cout << std::endl;
 	if (args.size() == 0 || args[0][0] == '#' || args[0][0] == ':')
 		return;
 
@@ -394,7 +400,8 @@ bool ScriptPass::check_label(std::string label, std::string info)
 }
 
 void ScriptPass::run(std::string command, std::string info)
-{
+{	
+	std::cout<<"ScriptPass::run: > " << command <<"; info: " << info << std::endl;
 	if (active_design == nullptr) {
 		if (info.empty())
 			log("        %s\n", command.c_str());

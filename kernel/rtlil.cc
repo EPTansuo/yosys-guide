@@ -672,6 +672,7 @@ bool RTLIL::AttrObject::get_bool_attribute(const RTLIL::IdString &id) const
 
 void RTLIL::AttrObject::set_string_attribute(const RTLIL::IdString& id, string value)
 {
+	std::cout << "Setting string attribute: " << id.str() << " = " << value << std::endl;
 	if (value.empty())
 		attributes.erase(id);
 	else

@@ -862,6 +862,9 @@ struct RTLIL::AttrObject
 
 	void set_intvec_attribute(const RTLIL::IdString& id, const vector<int> &data);
 	vector<int> get_intvec_attribute(const RTLIL::IdString &id) const;
+
+	// void  set_guide_attribute(const RTLIL::IdString &id, const);
+	
 };
 
 struct RTLIL::SigChunk

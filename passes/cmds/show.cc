@@ -602,8 +602,10 @@ struct ShowWorker
 						fprintf(f, "%s:e -> %s:w [%s, %s];\n", from.c_str(), to.c_str(), nextColor(it.second.color).c_str(), widthLabel(bits).c_str());
 					continue;
 				}
-				if (it.second.in.size() == 0 || it.second.out.size() == 0)
+				if (it.second.in.size() == 0 || it.second.out.size() == 0){
+					// std::cout << "Show:" << findLabel(wires_on_demand[it.first]) << std::endl;
 					fprintf(f, "%s [ shape=diamond, label=\"%s\" ];\n", it.first.c_str(), findLabel(wires_on_demand[it.first]));
+				}
 				else
 					fprintf(f, "%s [ shape=point ];\n", it.first.c_str());
 			}

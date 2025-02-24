@@ -298,6 +298,26 @@ bool check_public_name(RTLIL::IdString id)
 	return true;
 }
 
+
+// std::set<SigSpec> find_connected(RTLIL::Module *module, SigSpec *sigspec){
+// 	std::set<SigSpec> connected;
+
+// 	std::vector<SigSpec> sigspecs = {*sigspec};
+
+// 	for(size_t j=0; j < sigspecs.size(); j++){
+// 		for(size_t i=0; i < module->connections().size(); i++){
+// 			auto conn = module->connections()[i];
+// 			if(conn.first == *sigspec){
+// 				if(connected.count(conn.second))
+// 					continue;
+// 				connected.insert(conn.second);
+// 				sigspecs.push_back(conn.second);				
+// 			}
+// 		}
+// 	}
+// 	return connected;
+// }
+
 bool rmunused_module_signals(RTLIL::Module *module, bool purge_mode, bool verbose)
 {
 	// `register_signals` and `connected_signals` will help us decide later on
@@ -310,11 +330,15 @@ bool rmunused_module_signals(RTLIL::Module *module, bool purge_mode, bool verbos
 			if (ct_reg.cell_known(cell->type)) {
 				bool clk2fflogic = cell->get_bool_attribute(ID(clk2fflogic));
 				for (auto &it2 : cell->connections())
-					if (clk2fflogic ? it2.first == ID::D : ct_reg.cell_output(cell->type, it2.first))
+					if (clk2fflogic ? it2.first == ID::D : ct_reg.cell_output(cell->type, it2.first)){
 						register_signals.add(it2.second);
+						std::cout << "Register signal: " << it2.first.c_str() << std::endl;
+					}
 			}
-			for (auto &it2 : cell->connections())
+			for (auto &it2 : cell->connections()){
 				connected_signals.add(it2.second);
+				std::cout << "Connected signal: " << it2.first.c_str() << std::endl;
+			}
 		}
 
 	SigMap assign_map(module);
@@ -347,6 +371,34 @@ bool rmunused_module_signals(RTLIL::Module *module, bool purge_mode, bool verbos
 				assign_map.add(s1);
 		}
 	}
+
+	// preserve wire names
+	// std::unordered_map<RTLIL::Wire*, RTLIL::IdString> wire_names;
+	// for (auto wire : module->wires()){
+	// 	wire_names[wire] = wire->name;
+	// 	std::cout << "WireName: " << wire->name.str() << std::endl;
+	// }
+	static int flag = 0;
+	flag++;
+	if(flag == 2){
+
+	
+	std::cout << "Connections Num: " << module->connections().size() << std::endl;
+	for(auto connect: module->connections_){
+		// std::cout << "Connection: " << log_signal(connect.first) << "->" << log_signal(connect.second.as_string()) << std::endl;
+		// if(log_signal(connect.first) == std::string("\final_adder.m2.y")){
+		// 	std::cout << "FindConnection for \final_adder.m2.y" << std::endl;
+		// 	auto connects = find_connected(module, &connect.first);
+		// 	for(auto conn: connects){
+		// 		std::cout << "Connected: " << log_signal(connect.first) << " == "<< log_signal(conn) << std::endl;
+		// 	}
+		// }
+
+		std::cout << "Connections: " << log_signal(connect.first) << "->" << log_signal(connect.second) << std::endl;
+
+	}
+	}
+
 
 	// we are removing all connections
 	module->connections_.clear();
@@ -414,6 +466,13 @@ bool rmunused_module_signals(RTLIL::Module *module, bool purge_mode, bool verbos
 			wire->attributes[ID::init] = val;
 	}
 
+	// for (auto wire: module->wires()){
+	// 	// std::cout << "WireName: " << wire->name.str() << std::endl;
+	// 	SigSpec s1 = SigSpec(wire), s2 = assign_map(s1);
+	// 	std::cout << "WireName: assign_map: " << wire->name.str() << "->" << s2.as_string() << std::endl;
+	// }
+
+
 	// now decide for each wire if we should be deleting it
 	pool<RTLIL::Wire*> del_wires_queue;
 	for (auto wire : module->wires())
@@ -467,8 +526,14 @@ bool rmunused_module_signals(RTLIL::Module *module, bool purge_mode, bool verbos
 					wire->attributes.erase(ID::init);
 				else
 					wire->attributes.at(ID::init) = initval;
+				
+				// if (wire_names.count(wire))
+				// 	wire->name = wire_names[wire];
+
+
 				used_signals.add(new_conn.first);
 				used_signals.add(new_conn.second);
+				std::cout << "module_connect:" << std::endl;
 				module->connect(new_conn);
 			}
 
@@ -596,6 +661,7 @@ bool rmunused_module_init(RTLIL::Module *module, bool verbose)
 
 void rmunused_module(RTLIL::Module *module, bool purge_mode, bool verbose, bool rminit)
 {
+	std::cout << __func__ << std::string(":") + module->name.c_str() << std::endl;
 	if (verbose)
 		log("Finding unused cells or wires in module %s..\n", module->name.c_str());
 
@@ -608,6 +674,7 @@ void rmunused_module(RTLIL::Module *module, bool purge_mode, bool verbose, bool 
 			a.extend_u0(GetSize(y), is_signed);
 			module->connect(y, a);
 			delcells.push_back(cell);
+			std::cout << __func__ + std::string(":delcells: ") << cell->name.c_str();
 		}
 	for (auto cell : delcells) {
 		if (verbose)
@@ -617,13 +684,89 @@ void rmunused_module(RTLIL::Module *module, bool purge_mode, bool verbose, bool 
 	}
 	if (!delcells.empty())
 		module->design->scratchpad_set_bool("opt.did_something", true);
-
+	
 	rmunused_module_cells(module, verbose);
 	while (rmunused_module_signals(module, purge_mode, verbose)) { }
 
 	if (rminit && rmunused_module_init(module, verbose))
 		while (rmunused_module_signals(module, purge_mode, verbose)) { }
 }
+
+
+// typedef struct{
+// 	RTLIL::SigSpec sig;
+// 	std::vector<RTLIL::SigSpec> connected;
+// } assign_node;
+
+// std::string assign_str(std::set<SigSpec> &assigned){
+// 	std::string str = "";
+// 	bool first = true;
+// 	for(auto &assign: assigned){
+// 		if(first) first = false;
+// 		else str += " ";
+// 		str += log_signal(assign);
+// 	}
+// 	return str;
+// }
+
+
+// void preserve_info(RTLIL::Design *design, bool verbose, int cnt)
+// {	
+// 	//std::vector<assign_node> assign_nodes;de
+// 	std::unordered_map<std::string,std::set<SigSpec>> assign_nodes;
+// 	std::set<SigSpec> tmp;
+// 	for(auto module: design->selected_whole_modules_warn()){
+// 		std::cout << "PreserveInfo: " << module->name.str() << std::endl;
+// 		for (auto &it : module->wires_) {
+// 			RTLIL::Wire *wire = it.second;
+// 			if(wire->name.isPublic()){
+// 				std::cout << "WireName: " << "cnt= " << std::to_string(cnt) + " :"  << wire->name.str() << std::endl;
+// 				for(auto &conn: module->connections_){
+// 					if(conn.second == SigSpec(wire)){
+						
+// 						if(assign_nodes.count(wire->name.str())){
+// 							tmp = assign_nodes[wire->name.str()];
+// 						}else{
+// 							tmp = {};
+// 						}
+// 						tmp.insert(conn.first);
+// 						assign_nodes[wire->name.str()] = tmp;
+// 						std::cout << "Connection: assign " << log_signal(conn.first) << " = " << log_signal(conn.second) << std::endl;
+						
+// 					}
+// 					//std::cout << "Connection: " << log_signal(conn.first) << "->" << log_signal(conn.second) << std::endl;
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	for(auto &assign_node: assign_nodes){
+// 		std::cout << assign_node.first << " === {";
+// 		int first = 1;
+// 		for(auto &t: assign_node.second){
+// 			if(first) first = 0;
+// 			else std::cout << ", ";
+// 			std::cout << log_signal(t);
+// 		}	
+// 		std::cout << "}\n";
+// 	}
+
+
+
+// 	for(auto module: design->selected_whole_modules_warn()){
+// 		for(auto wire : module->selected_wires()){
+// 			if(assign_nodes.count(wire->name.str())){
+// 				//wire->set_bool_attribute(ID::keep, true);
+// 				// wire->set_hdlname_attribute(wire->)
+// 				//wire->set_string_attribute(ID::hdlname, wire->name.str());
+// 				wire->set_string_attribute(ID::guide, assign_str(assign_nodes[wire->name.str()]));	
+// 				// wire->set_hdlname_attribute({assign_str(assign_nodes[wire->name.str()])});
+// 			}
+// 		}
+// 	}
+	
+
+// }
 
 struct OptCleanPass : public Pass {
 	OptCleanPass() : Pass("opt_clean", "remove unused cells and wires") { }
@@ -647,6 +790,15 @@ struct OptCleanPass : public Pass {
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override
 	{
 		bool purge_mode = false;
+		static int cnt = 0;
+		std::cout<< "PassCall opt_clean: cnt=" << std::to_string(cnt) << std::endl;
+		if( cnt <= 11 && cnt >= 10){
+			Pass::call(design, "show -prefix " + std::to_string(cnt) + " " + design->top_module()->name.str());
+			// preserve_info(design, true, cnt);
+			// Pass::call(design, "write_verilog " + std::to_string(cnt) + ".v");
+		}
+		
+
 
 		log_header(design, "Executing OPT_CLEAN pass (remove unused cells and wires).\n");
 		log_push();
@@ -689,6 +841,16 @@ struct OptCleanPass : public Pass {
 		ct_reg.clear();
 		ct_all.clear();
 		log_pop();
+
+
+
+        
+		Pass::call(design,  "write_json " + std::to_string(cnt) + ".json");
+		cnt++;
+		// if(!purge_mode){
+		// 	preserve_info(design, true, cnt);
+		// }
+
 	}
 } OptCleanPass;
 

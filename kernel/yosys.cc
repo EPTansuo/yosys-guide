@@ -145,6 +145,7 @@ void yosys_banner()
 	log(" |  Distributed under an ISC-like license, type \"license\" to see terms        |\n");
 	log(" \\----------------------------------------------------------------------------/\n");
 	log(" %s\n", yosys_version_str);
+	log("  Build for debugging");
 }
 
 int ceil_log2(int x)
@@ -1308,7 +1309,7 @@ void shell(RTLIL::Design *design)
 
 	char *command = NULL;
 #if defined(YOSYS_ENABLE_READLINE) || defined(YOSYS_ENABLE_EDITLINE)
-	while ((command = readline(create_prompt(design, recursion_counter))) != NULL)
+	while ((command = readline(create_prompt(design, recursion_counter))) != NULL) // Command line editing
 	{
 #else
 	char command_buffer[4096];

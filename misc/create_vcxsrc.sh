@@ -37,7 +37,7 @@ mkdir -p "$vcxsrc"/yosys
 tar -cf - -T srcfiles.txt | tar -xf - -C "$vcxsrc"/yosys
 cp -r share "$vcxsrc"/
 
-echo "namespace Yosys { extern const char *yosys_version_str; const char *yosys_version_str=\"Yosys" \
+echo "namespace Yosys { extern const char *yosys_version_str; const char *yosys_version_str=\"Yosys_Modified" \
 		"$yosysver (git sha1 $gitsha, Visual Studio)\"; }" > "$vcxsrc"/yosys/kernel/version.cc
 
 cat > "$vcxsrc"/readme-git.txt << EOT
