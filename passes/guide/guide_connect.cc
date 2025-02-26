@@ -59,7 +59,6 @@ void print_all_connects(const Connects& conn){
 Connects get_module_wire_connects(RTLIL::Module *module){
     Connects connect_graph = {};
     Connects ret = {};
-    bool continue_flag = false;
     Sigs tmp;
 
 
@@ -77,7 +76,6 @@ Connects get_module_wire_connects(RTLIL::Module *module){
                 }
                 tmp.insert(log_signal(connection.first));
                 connect_graph[wire.first.str()] = tmp;
-                continue_flag = true;
             }
         }
     }
@@ -107,7 +105,7 @@ Connects get_module_wire_connects(RTLIL::Module *module){
 void write_guide_to_attr(RTLIL::Module *module, const Connects& conn){
     for(auto& wire: module->wires_){
         if(conn.count(wire.first.str())){
-            std::string guide = "same: {";
+            std::string guide = "connect: {";
             int first = 1;
             for(auto& t: conn.at(wire.first.str())){
                 if(first) first = 0;
@@ -137,6 +135,7 @@ struct GuideConnectPass : public Pass {
 		log("\n");
 	}
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override{
+        (void)args;
         std::cout << "GuideConnectPass::execute" << std::endl;  
         Connects conn;
         std::cout << "Module Num: " << std::to_string(design->modules_.size()) << std::endl;

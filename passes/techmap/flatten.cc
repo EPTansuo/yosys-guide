@@ -110,6 +110,9 @@ struct FlattenWorker
 	void flatten_cell(RTLIL::Design *design, RTLIL::Module *module, RTLIL::Cell *cell, RTLIL::Module *tpl, SigMap &sigmap, std::vector<RTLIL::Cell*> &new_cells)
 	{
 		// Copy the contents of the flattened cell
+		for(auto const & cell: tpl->selected_cells()){
+			std::cout << "tpl->cells: " << cell->name.str() << std::endl;
+		}
 
 		dict<IdString, IdString> memory_map;
 		for (auto &tpl_memory_it : tpl->memories) {
@@ -253,6 +256,7 @@ struct FlattenWorker
 		RTLIL::Cell *scopeinfo = nullptr;
 		RTLIL::IdString cell_name = cell->name;
 
+
 		if (create_scopeinfo && cell_name.isPublic())
 		{
 			// The $scopeinfo's name will be changed below after removing the flattened cell
@@ -272,6 +276,17 @@ struct FlattenWorker
 
 			scopeinfo->attributes.emplace(ID(module), RTLIL::unescape_id(tpl->name));
 		}
+
+		std::string cells_str = "{";
+		bool first = true;
+		for (auto const cell: tpl->selected_cells()){
+			//std::cout << "tpl->selected_cells: " << cell->name.str() << std::endl;
+			if (first) first = false;
+			else cells_str += ", ";
+			cells_str += cell->name.str();
+		}
+		cells_str += "}";
+		scopeinfo->set_string_attribute(ID::guide, "flatten: " + cells_str + ";");
 
 		module->remove(cell);
 
