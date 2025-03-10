@@ -793,7 +793,7 @@ struct OptCleanPass : public Pass {
 		static int cnt = 0;
 		std::cout<< "PassCall opt_clean: cnt=" << std::to_string(cnt) << std::endl;
 		if( cnt <= 11 && cnt >= 10){
-			Pass::call(design, "show -prefix " + std::to_string(cnt) + " " + design->top_module()->name.str());
+			// Pass::call(design, "show -prefix " + std::to_string(cnt) + " " + design->top_module()->name.str());
 			// preserve_info(design, true, cnt);
 			// Pass::call(design, "write_verilog " + std::to_string(cnt) + ".v");
 		}
@@ -845,7 +845,7 @@ struct OptCleanPass : public Pass {
 
 
         
-		Pass::call(design,  "write_json " + std::to_string(cnt) + ".json");
+		//Pass::call(design,  "write_json " + std::to_string(cnt) + ".json");
 		cnt++;
 		// if(!purge_mode){
 		// 	preserve_info(design, true, cnt);

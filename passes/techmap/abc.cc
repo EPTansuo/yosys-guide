@@ -1712,7 +1712,7 @@ struct AbcPass : public Pass {
 		}
 		keepff = design->scratchpad_get_bool("abc.keepff", keepff);
 		cleanup = !design->scratchpad_get_bool("abc.nocleanup", !cleanup);
-		cleanup = false;
+		//cleanup = false;
 		keepff = design->scratchpad_get_bool("abc.keepff", keepff);
 		show_tempdir = design->scratchpad_get_bool("abc.showtmp", show_tempdir);
 		markgroups = design->scratchpad_get_bool("abc.markgroups", markgroups);
@@ -2062,12 +2062,12 @@ struct AbcPass : public Pass {
 			if (!dff_mode || !clk_str.empty()) {
 
 				//Pass::call(design, "show -prefix " + std::string("before_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
-				Pass::call(design, "write_json " + std::string("before_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
+				//Pass::call(design, "write_json " + std::string("before_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
 				abc_module(design, mod, script_file, exe_file, liberty_files, genlib_files, constr_file, cleanup, lut_costs, dff_mode, clk_str, keepff,
 						delay_target, sop_inputs, sop_products, lutin_shared, fast_mode, mod->selected_cells(), show_tempdir, sop_mode, abc_dress, dont_use_cells);
 				std::cout << "Run abc_module:" << mod->name.str() <<std::endl;
 				//Pass::call(design, "show -prefix " + std::string("after_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
-				Pass::call(design, "write_json " + std::string("before_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
+				//Pass::call(design, "write_json " + std::string("before_abc_module_") + std::to_string(cnt) +  + " " + mod->name.str());
 				cnt++;
 				continue;
 			}

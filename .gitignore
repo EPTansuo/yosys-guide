@@ -53,3 +53,6 @@ __pycache__
 /boost
 /ffi
 .vscode
+tags
+.cache
+compile_commands.json

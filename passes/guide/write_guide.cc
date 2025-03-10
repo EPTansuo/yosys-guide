@@ -15,9 +15,16 @@ void write_guide(std::ostream& f, RTLIL::Design *design){
     f << "  \"modules\": {\n";
     for(auto module: design->modules_){
         f << "    \"" << module.first.str() <<  "\": {" <<std::endl;
+        
         for(auto wire: module.second->wires_){
             if(wire.second->attributes.count(ID::guide)){
                 f << "      " << wire.first.str() << ": " << wire.second->attributes.at(ID::guide).decode_string() << std::endl;
+            }
+        }
+
+        for(auto cell: module.second->cells_){
+            if(cell.second->attributes.count(ID::guide)){
+                f << "      " << cell.first.str() << ": " << cell.second->attributes.at(ID::guide).decode_string() << ";" <<std::endl;
             }
         }
         f << "    }\n";

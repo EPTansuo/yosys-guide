@@ -363,8 +363,8 @@ struct FlattenPass : public Pass {
 	}
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override
 	{
-		Pass::call(design, "show -prefix before_Flatten " + design->top_module()->name.str());
-		Pass::call(design, "write_verilog before_flatten.v ");
+		//Pass::call(design, "show -prefix before_Flatten " + design->top_module()->name.str());
+		//Pass::call(design, "write_verilog before_flatten.v ");
 		log_header(design, "Executing FLATTEN pass (flatten design).\n");
 		log_push();
 
@@ -428,8 +428,8 @@ struct FlattenPass : public Pass {
 				}
 
 		log_pop();
-		Pass::call(design, "show -prefix after_Flatten " + design->top_module()->name.str());
-		Pass::call(design, "write_verilog after_flatten.v ");
+		//Pass::call(design, "show -prefix after_Flatten " + design->top_module()->name.str());
+		//Pass::call(design, "write_verilog after_flatten.v ");
 	}
 } FlattenPass;
 

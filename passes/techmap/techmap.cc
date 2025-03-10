@@ -1229,6 +1229,11 @@ struct TechmapPass : public Pass {
 					Frontend::frontend_call(map, nullptr, fn, (fn.size() > 3 && fn.compare(fn.size()-3, std::string::npos, ".il") == 0 ? "rtlil" : verilog_frontend));
 				}
 		}
+		std::cout << "map modules" << std::endl;
+		for(auto module : map->modules()){
+			std::cout << module->name.str() << std::endl;
+		}
+			
 
 		log_header(design, "Continuing TECHMAP pass.\n");
 
