@@ -3,6 +3,7 @@
 #include <fstream>
 #include <ostream>
 #include <string>
+#include <unordered_set>
 // #include <tclDecls.h>
 
 USING_YOSYS_NAMESPACE
@@ -10,13 +11,17 @@ USING_YOSYS_NAMESPACE
 
 PRIVATE_NAMESPACE_BEGIN
 
+static std::unordered_set<std::string> multi_modules;
 
+std::string guide_gemti_mod_name(int a_width, int b_width){
+    return "guide_multigen_" + std::to_string(a_width) + "x" + std::to_string(b_width);
+}
 
 // ret: filename
 std::string guide_genmulti(int a_width, int b_width, int y_width){
     std::string filename = make_temp_file();
     std::ofstream file(filename);
-    file << "module guide_multigen_" << a_width << "x" << b_width << " (input [" << a_width-1 << ":0] A, input [" << b_width-1 
+    file << "module "<< guide_gemti_mod_name(a_width, b_width) << " (input [" << a_width-1 << ":0] A, input [" << b_width-1 
                                                                     << ":0] B, output [" << y_width-1 << ":0] Y);\n";
     file << "    assign Y = A * B;\n";
     file << "endmodule\n";
@@ -32,7 +37,7 @@ struct GuideMultiPass : public Pass {
 		//   |---v---|---v---|---v---|---v---|---v---|---v---|---v---|---v---|---v---|---v---|
 		log("\n");
 		log("    guide_multi \n");
-        log("Convert the $mul to a instance of multiplixer and preserve the infomation");
+        log("Convert the $mul to a instance of multiplixer and preserve the infomation if no arguments are given.\n");
 		log("\n");
 	}
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override{
@@ -79,11 +84,13 @@ struct GuideMultiPass : public Pass {
                 auto b_width = b.size();
                 auto y_width = y.size();
 
-
-                auto file_name = guide_genmulti(a_width, b_width, y_width);
-                Yosys::run_pass("read_verilog " + file_name);
-                
-                remove(file_name.c_str());
+                // Already generated the module
+                if(multi_modules.count(guide_gemti_mod_name(a_width, b_width)) == 0){
+                    multi_modules.insert(guide_gemti_mod_name(a_width, b_width));
+                    auto file_name = guide_genmulti(a_width, b_width, y_width);
+                    Yosys::run_pass("read_verilog " + file_name);
+                    remove(file_name.c_str());
+                }
                 
                 std::cout << "before multigen_cell " << std::endl;
                 std::string mod_name = "\\guide_multigen_" + std::to_string(a_width) + "x" + std::to_string(b_width);
@@ -101,7 +108,7 @@ struct GuideMultiPass : public Pass {
                 module->remove(to_replace_cell);
 
                 i++;
-                break;
+                // break;
             }
             
         }
