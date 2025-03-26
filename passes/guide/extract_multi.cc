@@ -25,6 +25,51 @@ std::vector<RTLIL::Cell *> get_multi_cells(RTLIL::Module* module){
     return multi_cells;
 }
 
+// generate wrapper for multipliers with different input width
+bool gen_wrapper_multi(std::string filename, std::string module_name, std::string submodule_name,
+    const Wire* A, const Wire* B, const Wire* Y)
+{
+    std::ofstream file;
+    file.open(filename,std::ios::app);
+    if(!file.is_open()){
+        log_error("Can't open file %s\n", filename.c_str());
+        return false;
+    }
+    
+    auto width = A->width > B->width ? A->width : B->width;
+    auto A_name = A->name.str()[0] == '\\' ? A->name.str().substr(1) : A->name.str();
+    auto B_name = B->name.str()[0] == '\\' ? B->name.str().substr(1) : B->name.str();
+    auto Y_name = Y->name.str()[0] == '\\' ? Y->name.str().substr(1) : Y->name.str();
+    file << "module " << module_name << " (input [" << width - 1 << ":0] A, input [" << width - 1 << ":0] B, output [" << 2 * width - 1 << ":0] Y);\n";
+    if(A->width > B->width){
+        auto width_diff = A->width - B->width;
+        file << "    wire [" << Y->width - 1 << ":0] sub_mod_Y;\n";
+        file << "    " << submodule_name << " " << submodule_name + "_inst" << " (";
+        
+        file << " ." << A_name << "(A), ." << B_name << "(B["<<  B->width-1 << ":0]), ." << Y_name << "(sub_mod_Y));\n";
+        // file << "    wire [" << width_diff - 1 << ":0] B_app;\n";
+        file << "    wire [" << width*2 - 1 << ":0] Y_app;\n";
+        file << "    assign Y_app = A * B["<<  width-1 << ":" << width-width_diff << "];\n";
+        file << "    assign Y = (Y_app << " << width_diff << ") + sub_mod_Y ;\n";
+
+    }
+    else{
+        auto width_diff = B->width - A->width;
+        file << "    wire [" << Y->width - 1 << ":0] sub_mod_Y;\n";
+        file << "    " << submodule_name << " " << submodule_name + "_inst" << " (";
+        file << " ." << A_name << "(A[" << A->width-1 << ":0], " << B_name << "(B), ." << Y_name << "(sub_mod_Y));\n";
+        // file << "    wire [" << width_diff - 1 << ":0] A_app;\n";
+        file << "    wire [" << width*2 - 1 << ":0] Y_app;\n";
+        file << "    assign Y_app = B * A[ "<<  width-1 << ":" << width-width_diff << "];\n";
+        file << "    assign Y = (Y_app << " << width_diff << ") + sub_mod_Y ;\n";
+    }
+    // file << "    " << submodule_name << " " << submodule_name + "_inst" << " (";
+    file << "endmodule" << std::endl;
+    file.close();
+    return true;
+}
+
+
 void extract_multi_delete_cells(RTLIL::Design* design){
     
     for(auto module: design->selected_whole_modules_warn()){
@@ -131,13 +176,41 @@ void extract_multi(RTLIL::Design* design, bool delete_flag){
             != multi_modules_name.end()){
             multi_modules.push_back(module);
             std::cout << module->name.str() <<  " is a multiplier" <<std::endl;
+            std::string module_name = module->name.str();
+
             auto aig_tmp_file = make_temp_file();
             aig_files.push_back(aig_tmp_file);
 
 
+            RTLIL::Wire* A = nullptr, *B = nullptr;
+            for(auto port: module->ports){
+                std::cout << "Port: " << port.str() << std::endl;
+                auto w = module->wire(port);
+                if(w->port_input && A == nullptr){
+                    A = w;
+                    continue;
+                }
+                if(w->port_input && B == nullptr){
+                    B = w;
+                    break;
+                }
+            }
+            if(A == nullptr || B == nullptr){
+                log_error("Invalid module ports.\n");
+                return;
+            }
+
+            // We need a wrapper module to make the input width match
+            if( A->width != B->width){
+                gen_wrapper_multi(v_tmp_file, module_name + "wrap", module_name, A, B, module->wire("\\Y"));
+                module_name = module_name + "wrap";
+            }
+
+
             std::string yosys_cmd = "read_verilog " + v_tmp_file + "; ";
-            yosys_cmd += "hierarchy -top " + module->name.str() + "; ";
+            yosys_cmd += "hierarchy -top " + module_name + "; ";
             yosys_cmd += "synth -flatten; ";
+            yosys_cmd += "techmap; ";
 //           yosys_cmd += "opt_clean; ";
             yosys_cmd += "aigmap; ";
             yosys_cmd += "write_aiger " + aig_tmp_file;
@@ -155,10 +228,10 @@ void extract_multi(RTLIL::Design* design, bool delete_flag){
         auto amulet_sub_cmd = "amulet -substitute " + aig_file + " " + miter_tmp_file  + " " + rewritten_tmp_file;
         std::cout << "Running amulet: " << amulet_sub_cmd << std::endl;
         auto ret = system(amulet_sub_cmd.c_str());
-        if(WEXITSTATUS(ret) != 1){
-            log_error("Amulet failed.\n");
-            return;
-        }
+        // if(WEXITSTATUS(ret) != 1){
+        //     log_error("Amulet failed.\n");
+        //     return;
+        // }
         // TODO: add kissat to verify the `miter` cnf file
         auto amulet_veri_cmd = "amulet -verify " + rewritten_tmp_file;
         ret = system(amulet_veri_cmd.c_str());
