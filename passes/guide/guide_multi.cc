@@ -130,18 +130,24 @@ struct GuideMultiPass : public Pass {
  
                 }
 
-                if(y_width != a_width + b_width){
+                std::cout << "y_width: " << y_width << std::endl;
+                std::cout << "a_width: " << a_width << std::endl;
+                std::cout << "b_width: " << b_width << std::endl;
+                if(y_width == a_width && y_width == b_width){
+                    // TODO: to verify the multiplier in picorv32
+                }
+                else if(y_width != a_width + b_width){
                     log_warning("A width + B width != Y width\nSet Y width to A width + B width!\n");
                     y_width = a_width + b_width;
                 }    
 
 
-                // Already generated the module
+                // Not already generated the module
                 if(multi_modules.count(guide_multi_mod_name(a_width, b_width)) == 0){
                     multi_modules.insert(guide_multi_mod_name(a_width, b_width));
                     auto file_name = guide_genmulti(a_width, b_width, y_width);
                     Yosys::run_pass("read_verilog " + file_name);
-                    remove(file_name.c_str());
+                    //remove(file_name.c_str());
                 }
                 
                 std::cout << "before multigen_cell " << std::endl;
@@ -163,6 +169,7 @@ struct GuideMultiPass : public Pass {
                 }
 
                 
+                std::cout<<"Add Cell" << std::endl;
                 RTLIL::Cell *cell = module->addCell(name, type);
                 if(y_width != y_width_origin){
                     for(auto conn: to_replace_cell->connections()){

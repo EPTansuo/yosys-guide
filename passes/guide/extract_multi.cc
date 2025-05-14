@@ -13,6 +13,55 @@ USING_YOSYS_NAMESPACE
 
 PRIVATE_NAMESPACE_BEGIN
 
+#include <iostream>
+#include <cstdio>
+#include <string>
+#include <vector>
+
+
+int execute_dynphaseorderopt_and_check(const std::string& command, 
+                     bool& correct) {
+    correct = false;
+    const std::string target_line = "CIRCUIT IS CORRECT.";
+    char buffer[1024];
+    std::string output;
+
+
+    FILE* pipe = popen(command.c_str(), "r");
+    if (!pipe) {
+        log_error("Error executing command: ");
+        return -1;
+    }
+
+    
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        output += buffer;
+        
+        if (output.find(target_line) != std::string::npos) {
+            correct = true;
+        }
+    }
+
+    int status = pclose(pipe);
+    if (WIFEXITED(status)) {
+        status = WEXITSTATUS(status);
+    } else {
+        status = -1; 
+    }
+
+    size_t pos = 0;
+    while ((pos = output.find('\n', pos)) != std::string::npos) {
+        size_t line_start = (pos > 0 && output[pos-1] == '\r') ? pos-1 : pos;
+        std::string line = output.substr(line_start, pos - line_start + 1);
+        if (line == target_line) {
+            correct = true;
+            break;
+        }
+        pos++;
+    }
+
+    return status;
+}
 
 
 std::vector<RTLIL::Cell *> get_multi_cells(RTLIL::Module* module){
@@ -127,7 +176,7 @@ void extract_multi_delete_cells(RTLIL::Design* design){
 }
 
 
-void extract_multi(RTLIL::Design* design, bool delete_flag){
+void extract_multi(RTLIL::Design* design, bool delete_flag, bool use_amulet){
     std::set<RTLIL::IdString> multi_modules_name;
     std::vector<RTLIL::Module *> multi_modules;
     std::vector<std::string> aig_files;
@@ -223,28 +272,43 @@ void extract_multi(RTLIL::Design* design, bool delete_flag){
     }
 
     for(auto aig_file: aig_files){
-        auto miter_tmp_file = make_temp_file();
-        auto rewritten_tmp_file = make_temp_file();
-        auto amulet_sub_cmd = "amulet -substitute " + aig_file + " " + miter_tmp_file  + " " + rewritten_tmp_file;
-        std::cout << "Running amulet: " << amulet_sub_cmd << std::endl;
-        auto ret = system(amulet_sub_cmd.c_str());
-        // if(WEXITSTATUS(ret) != 1){
-        //     log_error("Amulet failed.\n");
-        //     return;
-        // }
-        // TODO: add kissat to verify the `miter` cnf file
-        auto amulet_veri_cmd = "amulet -verify " + rewritten_tmp_file;
-        ret = system(amulet_veri_cmd.c_str());
-        if(WEXITSTATUS(ret) != 1){
-            log_error("Amulet Verify failed.\n");
-            return;
+
+        if(use_amulet){
+            log("Using amulet to verify the multiplier.\n");
+            auto miter_tmp_file = make_temp_file();
+            auto rewritten_tmp_file = make_temp_file();
+            auto amulet_sub_cmd = "amulet -substitute " + aig_file + " " + miter_tmp_file  + " " + rewritten_tmp_file;
+            std::cout << "Running amulet: " << amulet_sub_cmd << std::endl;
+            auto ret = system(amulet_sub_cmd.c_str());
+            // if(WEXITSTATUS(ret) != 1){
+            //     log_error("Amulet failed.\n");
+            //     return;
+            // }
+            // TODO: add kissat to verify the `miter` cnf file
+            auto amulet_veri_cmd = "amulet -verify " + rewritten_tmp_file;
+            ret = system(amulet_veri_cmd.c_str());
+            if(WEXITSTATUS(ret) != 1){
+                log_error("Amulet Verify failed.\n");
+                // return;
+            }
+            remove(rewritten_tmp_file.c_str());
+            remove(miter_tmp_file.c_str());
+        }else{
+            log("Using dynphaseorderopt to verify the multiplier.\n");
+            auto dynphaseorderopt_cmd = "dynphaseorderopt " + aig_file;
+            auto correct = false;
+            execute_dynphaseorderopt_and_check(dynphaseorderopt_cmd, correct);
+            if(!correct){
+                log_error("Dynphaseorderopt Verify failed.\n");
+                // return;
+            }
         }
-        remove(rewritten_tmp_file.c_str());
-        remove(miter_tmp_file.c_str());
+
     }
 
     for(auto aig_file: aig_files){
-        remove(aig_file.c_str());
+        // TODO: Remove aig files
+        // remove(aig_file.c_str());
     }
 
     remove(v_tmp_file.c_str());
@@ -266,32 +330,45 @@ struct ExtractMultiPass : public Pass {
 	{
 		//   |---v---|---v---|---v---|---v---|---v---|---v---|---v---|---v---|---v---|---v---|
 		log("\n");
-		log("    extract -d\n");
+		log("    extract [options]\n");
 		log("\n");
 		log("    -d\n");
-		log("        Delete the Multiplier\n");
+		log("        Delete the Multiplier (default: do not delete). \n");
+        log("\n");
+        log("    -amulet\n");
+        log("        Use amulet to verify the multiplier (default: dynphaseorderopt). \n");
+        log("        amulet: Kaufmann, Daniela, and Armin Biere. AMulet 2.0 for verifying multiplier circuits.\n");
+        log("        dynphaseorderopt: Konrad, Alexander, and Christoph Scholl. Symbolic Computer Algebra for \n");
+        log("        Multipliers Revisited-It's All About Orders and Phases.\n");
 		log("\n");
 	}
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override{
         bool delete_flag = false;
-        if(args.size() > 2){
-            log_cmd_error("Invalid number of arguments.\n");
-            return;
-        }
-        if(args.size() == 2){
-            if(args[1] == "-d"){
+        bool use_amulet = false;
+
+		size_t argidx;
+		for (argidx = 1; argidx < args.size(); argidx++)
+		{
+            if (args[argidx] == "-d") {
                 delete_flag = true;
-            }else{
+                continue;
+            }
+            else if (args[argidx] == "-amulet") {
+                use_amulet = true;
+                continue;
+            }
+            else {
                 log_cmd_error("Invalid arguments.\n");
                 return;
             }
-        }
+		}
+
         
         if(design->top_module() == nullptr){
             log_cmd_error("No top module found.\n");
             return;
         }
-        extract_multi(design, delete_flag);
+        extract_multi(design, delete_flag, use_amulet);
 
     }
 

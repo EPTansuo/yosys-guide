@@ -4,3 +4,5 @@ OBJS += passes/guide/guide_flatten.o
 OBJS += passes/guide/guide_multi.o
 OBJS += passes/guide/extract_multi.o
 OBJS += passes/guide/guide_test.o
+OBJS += passes/guide/guide_retime.o
+OBJS += passes/guide/extract_retime.o
