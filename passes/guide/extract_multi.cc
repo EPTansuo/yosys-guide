@@ -18,30 +18,27 @@ PRIVATE_NAMESPACE_BEGIN
 #include <string>
 #include <vector>
 
-
-int execute_dynphaseorderopt_and_check(const std::string& command, 
-                     bool& correct) {
+int exectue_and_check(const std::string & cmd, bool & correct, 
+                      const std::string & target_output) {
     correct = false;
-    const std::string target_line = "CIRCUIT IS CORRECT.";
     char buffer[1024];
     std::string output;
 
-
-    FILE* pipe = popen(command.c_str(), "r");
+    FILE *pipe = popen(cmd.c_str(), "r");
     if (!pipe) {
         log_error("Error executing command: ");
         return -1;
     }
 
-    
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
         output += buffer;
-        
-        if (output.find(target_line) != std::string::npos) {
+        std::cout<< buffer;
+        if (output.find(target_output) != std::string::npos) {
             correct = true;
         }
     }
 
+    
     int status = pclose(pipe);
     if (WIFEXITED(status)) {
         status = WEXITSTATUS(status);
@@ -49,25 +46,29 @@ int execute_dynphaseorderopt_and_check(const std::string& command,
         status = -1; 
     }
 
-    size_t pos = 0;
-    while ((pos = output.find('\n', pos)) != std::string::npos) {
-        size_t line_start = (pos > 0 && output[pos-1] == '\r') ? pos-1 : pos;
-        std::string line = output.substr(line_start, pos - line_start + 1);
-        if (line == target_line) {
-            correct = true;
-            break;
-        }
-        pos++;
-    }
-
     return status;
+}
+
+
+int execute_dynphaseorderopt_and_check(const std::string& command, 
+                     bool& correct) {
+    correct = false;
+    const std::string target_line = "CIRCUIT IS CORRECT.";
+    return exectue_and_check(command, correct, target_line);
+}
+
+int execute_revsca_and_check(const std::string& command, 
+                     bool& correct) {
+    correct = false;
+    const std::string target_line = "The multiplier is correct!";
+    return exectue_and_check(command, correct, target_line);
 }
 
 
 std::vector<RTLIL::Cell *> get_multi_cells(RTLIL::Module* module){
     std::vector<RTLIL::Cell *> multi_cells;
     for(auto cell: module->selected_cells()){
-        if(cell->get_string_attribute(ID::guide) == "multiplier"){
+        if(cell->get_string_attribute(ID::guide).find("multiplier")!= std::string::npos){
             multi_cells.push_back(cell);
         }
     }
@@ -127,6 +128,9 @@ void extract_multi_delete_cells(RTLIL::Design* design){
             auto a = cell->getPort(ID::A);
             auto b = cell->getPort(ID::B);
             auto y = cell->getPort(ID::Y);  
+            std::cout << "a.size()" << a.size() << std::endl;
+            std::cout << "b.size()" << b.size() << std::endl;
+            std::cout << "y.size()" << y.size() << std::endl;   
 
             if(a.size() + b.size() > y.size()){
                 RTLIL::SigSpec a_in;
@@ -155,14 +159,21 @@ void extract_multi_delete_cells(RTLIL::Design* design){
                 }
                 std::cout << "a_in.size(): " << a_in.size() << std::endl;
                 std::cout << "b_in.size(): " << b_in.size() << std::endl;
+                std::cout << "y_out.size(): " << y.size() << std::endl;
                 // for(auto conn: module->connections()){
                 //     if()
                 // }
                 
                 auto a_conn = y.extract(0, a_in.size());
-                auto b_conn = y.extract(a_in.size(), b_in.size());
+                auto b_conn = y.extract(a_in.size(), y.size()-a_in.size());
                 module->connect(a_in, a_conn);
-                module->connect(b_in, b_conn);
+                module->connect(b_in.extract(0, y.size()-a_in.size()), b_conn);
+            }else if(a.size() + b.size() < y.size()) { 
+                log_warning("Y width is smaller than A width + B width\n");
+                auto a_conn = y.extract(0, a.size());
+                auto b_conn = y.extract(a.size(), y.size()-a.size());
+                module->connect(a_conn, a);
+                module->connect(b_conn, b);
             }else{
                 auto a_conn = y.extract(0, a.size());
                 auto b_conn = y.extract(a.size(), b.size());
@@ -176,19 +187,25 @@ void extract_multi_delete_cells(RTLIL::Design* design){
 }
 
 
-void extract_multi(RTLIL::Design* design, bool delete_flag, bool use_amulet){
+void extract_multi(RTLIL::Design* design, bool delete_flag, int mode){
     std::set<RTLIL::IdString> multi_modules_name;
+    // std::map<RTLIL::IdString, bool> multi_sign_map;
     std::vector<RTLIL::Module *> multi_modules;
     std::vector<std::string> aig_files;
+    std::vector<bool> sign;
 
     auto v_tmp_file = make_temp_file();
     Pass::call(design, "write_verilog "  + v_tmp_file);
 
     for(auto module: design->selected_whole_modules_warn()){
-        if(module->name.str().find("\\guide_multigen_") != std::string::npos){
+        // if(module->name.str().find("\\guide_multigen_") != std::string::npos){
+        //     continue;
+        // }
+        
+        if(module->get_string_attribute(ID::guide).find("multiplier") != std::string::npos){
             continue;
         }
-        
+
         auto multi_cells = get_multi_cells(module);
         for(auto cell: multi_cells){
             auto a = cell->getPort(ID::A);
@@ -205,6 +222,12 @@ void extract_multi(RTLIL::Design* design, bool delete_flag, bool use_amulet){
             std::cout << "    y: "  << " width: " << y_width << std::endl;
             multi_modules_name.insert(type);
 
+            // if(cell->getParam(ID::A_SIGNED).as_bool() != cell->getParam(ID::B_SIGNED).as_bool()){
+            //     log_error("A_SIGNED and B_SIGNED are not the same!\n");
+            //     return;
+            // }
+            // multi_sign_map.insert(std::make_pair(type, cell->getParam(ID::A_SIGNED).as_bool()));
+            // multi_sign_map.insert(std::make_pair(type, cell->ty));
 
             for(auto conn: cell->connections()){
                 if(conn.first == ID::A){
@@ -219,17 +242,18 @@ void extract_multi(RTLIL::Design* design, bool delete_flag, bool use_amulet){
     }
 
 
-
+    std::map<std::string, bool> aig_sign_map;
     for(auto module: design->selected_whole_modules_warn()){
         if(std::find(multi_modules_name.begin(), multi_modules_name.end(), module->name) 
             != multi_modules_name.end()){
             multi_modules.push_back(module);
             std::cout << module->name.str() <<  " is a multiplier" <<std::endl;
             std::string module_name = module->name.str();
-
+            
             auto aig_tmp_file = make_temp_file();
             aig_files.push_back(aig_tmp_file);
-
+            // aig_modname_map.insert(std::make_pair(module_name, module->name));
+            aig_sign_map.insert(std::make_pair(aig_tmp_file, module->name.str().find("_signed") != std::string::npos));
 
             RTLIL::Wire* A = nullptr, *B = nullptr;
             for(auto port: module->ports){
@@ -272,28 +296,9 @@ void extract_multi(RTLIL::Design* design, bool delete_flag, bool use_amulet){
     }
 
     for(auto aig_file: aig_files){
-
-        if(use_amulet){
-            log("Using amulet to verify the multiplier.\n");
-            auto miter_tmp_file = make_temp_file();
-            auto rewritten_tmp_file = make_temp_file();
-            auto amulet_sub_cmd = "amulet -substitute " + aig_file + " " + miter_tmp_file  + " " + rewritten_tmp_file;
-            std::cout << "Running amulet: " << amulet_sub_cmd << std::endl;
-            auto ret = system(amulet_sub_cmd.c_str());
-            // if(WEXITSTATUS(ret) != 1){
-            //     log_error("Amulet failed.\n");
-            //     return;
-            // }
-            // TODO: add kissat to verify the `miter` cnf file
-            auto amulet_veri_cmd = "amulet -verify " + rewritten_tmp_file;
-            ret = system(amulet_veri_cmd.c_str());
-            if(WEXITSTATUS(ret) != 1){
-                log_error("Amulet Verify failed.\n");
-                // return;
-            }
-            remove(rewritten_tmp_file.c_str());
-            remove(miter_tmp_file.c_str());
-        }else{
+        
+        auto sign = aig_sign_map[aig_file];
+        if(mode == 0){
             log("Using dynphaseorderopt to verify the multiplier.\n");
             auto dynphaseorderopt_cmd = "dynphaseorderopt " + aig_file;
             auto correct = false;
@@ -302,6 +307,42 @@ void extract_multi(RTLIL::Design* design, bool delete_flag, bool use_amulet){
                 log_error("Dynphaseorderopt Verify failed.\n");
                 // return;
             }
+        }
+        else if(mode == 1){
+            log("Using amulet to verify the multiplier.\n");
+            auto miter_tmp_file = make_temp_file();
+            auto rewritten_tmp_file = make_temp_file();
+            auto amulet_sub_cmd = "amulet -substitute " + aig_file + " " + miter_tmp_file  + " " + rewritten_tmp_file + (sign? " -signed" : "");
+            std::cout << "Running amulet: " << amulet_sub_cmd << std::endl;
+            auto ret = system(amulet_sub_cmd.c_str());
+            // if(WEXITSTATUS(ret) != 1){
+            //     log_error("Amulet failed.\n");
+            //     return;
+            // }
+            // TODO: add kissat to verify the `miter` cnf file
+            auto amulet_veri_cmd = "amulet -verify " + rewritten_tmp_file + (sign ? " -signed" : "");
+
+            std::cout << "Running amulet: " << amulet_veri_cmd << std::endl;
+
+            ret = system(amulet_veri_cmd.c_str());
+            if(WEXITSTATUS(ret) != 1){
+                log_error("Amulet Verify failed.\n");
+                // return;
+            }
+            remove(rewritten_tmp_file.c_str());
+            remove(miter_tmp_file.c_str());
+        }else if(mode == 2){
+            log("Using RevSCA to verify the multiplier.\n");
+
+            auto out_tmp_file = make_temp_file();
+            auto revsca_cmd = "revsca " + aig_file + " " + out_tmp_file + (sign ? " -s": " -u");
+            auto correct = false;
+            execute_revsca_and_check(revsca_cmd, correct);
+            if(!correct){
+                log_error("RevSCA Verify failed.\n");
+                // return;
+            }
+            remove(out_tmp_file.c_str());
         }
 
     }
@@ -336,15 +377,23 @@ struct ExtractMultiPass : public Pass {
 		log("        Delete the Multiplier (default: do not delete). \n");
         log("\n");
         log("    -amulet\n");
-        log("        Use amulet to verify the multiplier (default: dynphaseorderopt). \n");
-        log("        amulet: Kaufmann, Daniela, and Armin Biere. AMulet 2.0 for verifying multiplier circuits.\n");
+        log("        Use amulet to verify the multiplier. Equivanence to \"-mode 1\"\n");
+        log("    -mode <num>\n");
+        log("        select tool to verify the multiplier (default: dynphaseorderopt). \n");
+        log("             0: dynphaseorderopt\n");
+        log("             1: amulet\n");
+        log("             2: revsca");
+        log("        Only amulet and revsca can verify the multiplier with signed input.\n");
         log("        dynphaseorderopt: Konrad, Alexander, and Christoph Scholl. Symbolic Computer Algebra for \n");
         log("        Multipliers Revisited-It's All About Orders and Phases.\n");
+        log("        Amulet: Kaufmann, Daniela, and Armin Biere. AMulet 2.0 for verifying multiplier circuits.\n");
+        log("        RevSCA: Mahzoon, Alireza, Daniel Große, and Rolf Drechsler. RevSCA-2.0: SCA-based formal \n");
+        log("        verification of nontrivial multipliers using reverse engineering and local vanishing removal.\n");
 		log("\n");
 	}
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override{
         bool delete_flag = false;
-        bool use_amulet = false;
+        int mode = 0;
 
 		size_t argidx;
 		for (argidx = 1; argidx < args.size(); argidx++)
@@ -353,8 +402,12 @@ struct ExtractMultiPass : public Pass {
                 delete_flag = true;
                 continue;
             }
-            else if (args[argidx] == "-amulet") {
-                use_amulet = true;
+            else if (args[argidx] == "-amulet"){
+                mode = 1;
+                continue;
+            }
+            else if (args[argidx] == "-mode" && argidx+1 < args.size()) {
+                mode = std::stoi(args[++argidx]);
                 continue;
             }
             else {
@@ -368,7 +421,7 @@ struct ExtractMultiPass : public Pass {
             log_cmd_error("No top module found.\n");
             return;
         }
-        extract_multi(design, delete_flag, use_amulet);
+        extract_multi(design, delete_flag, mode);
 
     }
 

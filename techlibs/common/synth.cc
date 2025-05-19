@@ -242,7 +242,7 @@ struct SynthPass : public ScriptPass {
 			run("proc");
 			if (flatten || help_mode)
 				run("flatten", "  (if -flatten)");
-			run("guide_connect");
+			// run("guide_connect");
 			run("opt_expr");
 			run("opt_clean");
 			run("check");
